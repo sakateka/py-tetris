@@ -1,4 +1,5 @@
 from microbit import *
+import random
 import neopixel
 
 SCREEN_WIDTH = 8
@@ -272,14 +273,15 @@ CONCRETE = init_matrix()
 X = 3
 Y = 6
 IPASS = 0
+CURRENT_T = T
 
 
 @run_every(ms=10)
 def main():
-    global JUMP, SCORE, X, Y, IPASS
+    global JUMP, SCORE, X, Y, IPASS, CURRENT_T
 
     if JUMP:
-        rotate(T)
+        rotate(CURRENT_T)
         JUMP = 0
         SCORE += 1
 
@@ -300,11 +302,12 @@ def main():
     нарисуй_фигуру(HLINE, x=0, y=5, color=PINK)
 
     # Next tetromino
-    if можно_рисовать(T, x=X, y=Y):
-        нарисуй_фигуру(T, x=X, y=Y, color=BLUE)
+    if можно_рисовать(CURRENT_T, x=X, y=Y):
+        нарисуй_фигуру(CURRENT_T, x=X, y=Y, color=BLUE)
     else:
-        нарисуй_фигуру(T, x=X, y=Y - 1, color=BRICK, painter=concrete_dot)
+        нарисуй_фигуру(CURRENT_T, x=X, y=Y - 1, color=BRICK, painter=concrete_dot)
         Y = 6
+        CURRENT_T = random.choice(TETRAMINOS)
 
     render_screen(SCREEN)
 
