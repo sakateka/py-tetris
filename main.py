@@ -23,42 +23,42 @@ STRIKE: list = ["  "] + ["##"] * (WIDTH - 2) + ["  "]
 
 
 O: list[list[str]] = [
-     ["##", "##"],
-     ["##", "##"],
+    ["##", "##"],
+    ["##", "##"],
 ]
 
 I: list[list[str]] = [
-     ["##"],
-     ["##"],
-     ["##"],
-     ["##"],
+    ["##"],
+    ["##"],
+    ["##"],
+    ["##"],
 ]
 
 L: list[list[str]] = [
-     ["##", "  "],
-     ["##", "  "],
-     ["##", "##"],
+    ["##", "  "],
+    ["##", "  "],
+    ["##", "##"],
 ]
 
 J: list[list[str]] = [
-     ["  ", "##"],
-     ["  ", "##"],
-     ["##", "##"],
+    ["  ", "##"],
+    ["  ", "##"],
+    ["##", "##"],
 ]
 
 S: list[list[str]] = [
-     ["  ", "##", "##"],
-     ["##", "##", "  "],
+    ["  ", "##", "##"],
+    ["##", "##", "  "],
 ]
 
 Z: list[list[str]] = [
-     ["##", "##", "  "],
-     ["  ", "##", "##"],
+    ["##", "##", "  "],
+    ["  ", "##", "##"],
 ]
 
 T: list[list[str]] = [
-     ["##", "##", "##"],
-     ["  ", "##", "  "],
+    ["##", "##", "##"],
+    ["  ", "##", "  "],
 ]
 
 TETRAMINOS = [O, I, L, J, S, Z, T]
@@ -69,33 +69,37 @@ def render() -> str:
 
     for y in range(HEIGHT):
         for x in range(WIDTH):
-            result.write(SCREEN[x+WIDTH*y])
+            result.write(SCREEN[x + WIDTH * y])
         result.write("\n")
     result.seek(0)
     return result.getvalue()
+
 
 def can_place(tetramino: list[list[str]], xc, yc) -> bool:
     for y in range(len(tetramino)):
         for x in range(len(tetramino[0])):
             if tetramino[y][x] == "  ":
                 continue
-            idx = (xc+x)+WIDTH*(yc+y)
+            idx = (xc + x) + WIDTH * (yc + y)
             if idx >= len(SCREEN) or SCREEN[idx] != "  ":
                 return False
     return True
+
 
 def place(container: list[str], tetramino: list[list[str]], xc, yc):
     for y in range(len(tetramino)):
         for x in range(len(tetramino[0])):
             if tetramino[y][x] == "  ":
                 continue
-            container[(xc+x)+WIDTH*(yc+y)] = "##"
+            container[(xc + x) + WIDTH * (yc + y)] = "##"
+
 
 def place_concrete():
-    for y in range(1, HEIGHT-1):
-        for x in range(1, WIDTH-1):
-            idx = x+WIDTH*y
+    for y in range(1, HEIGHT - 1):
+        for x in range(1, WIDTH - 1):
+            idx = x + WIDTH * y
             SCREEN[idx] = CONCRETE[idx]
+
 
 def is_empty(l: list[str]) -> bool:
     return all(c == "  " for c in l)
@@ -105,27 +109,28 @@ def reduce_concrete():
     global SCORE
     idx = WIDTH
     first_concret_idx = None
-    while idx < len(CONCRETE)-WIDTH:
-        row = CONCRETE[idx:idx+WIDTH]
+    while idx < len(CONCRETE) - WIDTH:
+        row = CONCRETE[idx : idx + WIDTH]
         if first_concret_idx is None and "##" in row:
-           first_concret_idx = idx
+            first_concret_idx = idx
 
         if first_concret_idx is not None and is_empty(row):
-            CONCRETE[WIDTH:idx+WIDTH] = CONCRETE[:idx]
+            CONCRETE[WIDTH : idx + WIDTH] = CONCRETE[:idx]
             CONCRETE[:WIDTH] = EMPTY_ROW.copy()
             SCORE += 1
         idx += WIDTH
 
-
     idx = WIDTH
     while idx < len(CONCRETE) + WIDTH:
-        if CONCRETE[idx:idx+WIDTH] == STRIKE:
-            CONCRETE[idx:idx+WIDTH] =  EMPTY_ROW.copy()
+        if CONCRETE[idx : idx + WIDTH] == STRIKE:
+            CONCRETE[idx : idx + WIDTH] = EMPTY_ROW.copy()
         idx += WIDTH
+
 
 def clear_concrete():
     for i in range(len(CONCRETE)):
         CONCRETE[i] = "  "
+
 
 def clear_screen():
     for i in range(len(SCREEN)):
@@ -136,18 +141,19 @@ def clear_screen():
         SCREEN[i] = "@@"
 
     for i in range(WIDTH):
-        SCREEN[i+WIDTH*(HEIGHT-1)] = "@@"
+        SCREEN[i + WIDTH * (HEIGHT - 1)] = "@@"
 
     for j in range(HEIGHT):
-        SCREEN[WIDTH*j] = "@@"
-        SCREEN[(WIDTH-1)+WIDTH*j] = "@@"
+        SCREEN[WIDTH * j] = "@@"
+        SCREEN[(WIDTH - 1) + WIDTH * j] = "@@"
+
 
 def rotate_right(t: list[list[str]]):
     origin = copy.deepcopy(t)
     t.clear()
 
     for _ in range(len(origin[0])):
-        t.append(["  "]*len(origin))
+        t.append(["  "] * len(origin))
     # [        [
     #  [#, ]    [#, #, #]
     #  [#, ]    [#,  ,  ]
@@ -156,15 +162,16 @@ def rotate_right(t: list[list[str]]):
     for ch_idx in range(len(origin)):
         for r_idx in range(len(origin[0])):
 
-            new_ch_idx = len(origin)-1-ch_idx
+            new_ch_idx = len(origin) - 1 - ch_idx
             t[r_idx][new_ch_idx] = origin[ch_idx][r_idx]
+
 
 def rotate_left(t: list[list[str]]):
     origin = copy.deepcopy(t)
     t.clear()
 
     for _ in range(len(origin[0])):
-        t.append(["  "]*len(origin))
+        t.append(["  "] * len(origin))
     # [        [
     #  [#, ]    [ ,  , #]
     #  [#, ]    [#, #, #]
@@ -173,46 +180,50 @@ def rotate_left(t: list[list[str]]):
 
     for ch_idx in range(len(origin)):
         for r_idx in range(len(origin[0])):
-            t[len(origin[0])-1-r_idx][ch_idx] = origin[ch_idx][r_idx]
+            t[len(origin[0]) - 1 - r_idx][ch_idx] = origin[ch_idx][r_idx]
+
 
 def can_rotate(tetramino, rotator, x, y):
     clone = copy.deepcopy(tetramino)
     rotator(clone)
     return can_place(clone, x, y)
 
+
 # copy paste from https://github.com/sakateka/big-jump
 def getchr():
-        ch = sys.stdin.read(1)
-        if ch == '\x1b':  # Escape key
-            ch = sys.stdin.read(2)
-            if ch == '[A':  # ]
-                return "up"
-            elif ch == '[B':  # ]
-                return "down"
-            elif ch == '[C':  # ]
-                return "right"
-            elif ch == '[D':  # ]
-                return "left"
-            elif ch == '[5':  # ]
-                ch = sys.stdin.read(1)
-                return "page-up"
-            elif ch == '[6':  # ]
-                ch = sys.stdin.read(1)
-                return "page-down"
-        elif ch == '\r' or ch == '\n':  # Enter key
-            return "enter"
-        elif ch == 'e':
-            return "exit"
-        elif ch == ' ':  # Space key
-            return "space"
-        else:
-            return ch
-        return ""
+    ch = sys.stdin.read(1)
+    if ch == "\x1b":  # Escape key
+        ch = sys.stdin.read(2)
+        if ch == "[A":  # ]
+            return "up"
+        elif ch == "[B":  # ]
+            return "down"
+        elif ch == "[C":  # ]
+            return "right"
+        elif ch == "[D":  # ]
+            return "left"
+        elif ch == "[5":  # ]
+            ch = sys.stdin.read(1)
+            return "page-up"
+        elif ch == "[6":  # ]
+            ch = sys.stdin.read(1)
+            return "page-down"
+    elif ch == "\r" or ch == "\n":  # Enter key
+        return "enter"
+    elif ch == "e":
+        return "exit"
+    elif ch == " ":  # Space key
+        return "space"
+    else:
+        return ch
+    return ""
+
 
 CONTROL = ""
 ROTATE = False
 RESTART = False
 EXIT = False
+
 
 def control(main=False):
     global ROTATE, CONTROL, RESTART, EXIT
@@ -275,24 +286,23 @@ def main() -> None:
         if CONTROL:
             match CONTROL:
                 case "left":
-                    if can_place(t, x-1, y):
+                    if can_place(t, x - 1, y):
                         x -= 1
                 case "right":
-                    if can_place(t, x+1, y):
+                    if can_place(t, x + 1, y):
                         x += 1
                 case "down":
-                    if can_place(t, x, y+1):
+                    if can_place(t, x, y + 1):
                         y += 1
                 case _:
                     pass
             CONTROL = ""
 
-
         if can_place(t, x, y):
             place(SCREEN, t, x, y)
         else:
-            place(SCREEN, t, x, y-1)
-            place(CONCRETE, t, x, y-1)
+            place(SCREEN, t, x, y - 1)
+            place(CONCRETE, t, x, y - 1)
 
             y = Y_INIT_POS
             x = X_INIT_POS
@@ -302,7 +312,7 @@ def main() -> None:
             place(SCREEN, t, x, y)
 
         print(render())
-        sys.stdout.write(CURSOR_UP * (HEIGHT+1))
+        sys.stdout.write(CURSOR_UP * (HEIGHT + 1))
         sys.stdout.flush()
         if game_over:
             place_gameover()
