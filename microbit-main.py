@@ -158,28 +158,11 @@ def Dot(x: int, y: int, color: "tuple[int, int, int]"):
 
 
 def is_full_row(row: "list[tuple[int, int, int]]"):
+    black = 0
     for ch in row:
         if ch[0] == 0 and ch[1] == 0 and ch[2] == 0:
-            return False
-    return True
-
-
-def reduce_concrete():
-    global SCORE
-    to_idx = len(CONCRETE) - 1
-    for idx in range(len(CONCRETE) - 1, -1, -1):
-        if is_full_row(CONCRETE[idx]):
-            SCORE += 1
-        else:
-            to_idx -= 1
-        if idx > to_idx:
-            print(idx, to_idx)
-            for c_idx in range(len(CONCRETE[idx])):
-                CONCRETE[to_idx][c_idx] = CONCRETE[idx][c_idx]
-
-    for row_idx in range(to_idx):
-        for c_idx in range(len(CONCRETE[row_idx])):
-            CONCRETE[row_idx][c_idx] = BLACK
+            black += 1
+    return black == 0
 
 
 def copy_matrix(_from: "list[list[tuple]]", to: "list[list[tuple]]"):
@@ -266,6 +249,26 @@ def rotate(origin: "list[list[str]]", x: int) -> "tuple[list[list[str]], int]":
     return rotated, shift
 
 
+def reduce_concrete():
+    global SCORE
+    max_idx = len(CONCRETE) - 1
+    to_idx = max_idx
+    for idx in range(max_idx, 5, -1):
+        full = is_full_row(CONCRETE[idx])
+        if full:
+            SCORE += 1
+        if idx < to_idx:
+            for c_idx in range(len(CONCRETE[idx])):
+                CONCRETE[to_idx][c_idx] = CONCRETE[idx][c_idx]
+        if not full:
+            to_idx -= 1
+
+    if to_idx > 0:
+        for row_idx in range(to_idx - 1, -1, -1):
+            for c_idx in range(len(CONCRETE[row_idx])):
+                CONCRETE[row_idx][c_idx] = BLACK
+
+
 SCORE = 0
 SCREEN = init_matrix()
 CONCRETE = init_matrix()
@@ -276,14 +279,15 @@ def main():
 
     JUMP = 0
 
-    X = 3
+    INIT_X = 3
+    INIT_Y = 6
+    X = INIT_X
+    Y = INIT_Y
     X_DIFF = 0
-    Y = 6
 
     IPASS = 0
     IPASS_DIFF = 1
-    CURRENT_T = T
-    CONCRETE_UPDATED = False
+    CURRENT_T = random.choice(TETRAMINOS)
 
     while True:
         JUMP = JUMP or pin8.read_digital()
@@ -298,9 +302,6 @@ def main():
             IPASS = 0
             Y += 1
 
-        if CONCRETE_UPDATED:
-            reduce_concrete()
-            CONCRETE_UPDATED = False
         copy_matrix(CONCRETE, SCREEN)
         draw_score(SCORE)
 
@@ -322,10 +323,12 @@ def main():
         if можно_рисовать(CURRENT_T, x=X, y=Y):
             нарисуй_фигуру(CURRENT_T, x=X, y=Y, color=BLUE)
         else:
+            print("x = ", X, "y = ", Y)
             нарисуй_фигуру(CURRENT_T, x=X, y=Y - 1, color=BRICK, painter=concrete_dot)
-            Y = 6
+            X = INIT_X
+            Y = INIT_Y
             CURRENT_T = random.choice(TETRAMINOS)
-            CONCRETE_UPDATED = True
+            reduce_concrete()
 
         render_screen(SCREEN)
 
