@@ -124,10 +124,10 @@ HLINE = [["#"] * SCREEN_WIDTH]
 pin8.set_pull(pin8.PULL_UP)
 
 np = neopixel.NeoPixel(pin0, 256)
-RED = (1, 0, 0)
-GREEN = (0, 1, 0)
-BLUE = (0, 0, 1)
-PINK = (2, 0, 2)
+RED = (6, 0, 0)
+GREEN = (0, 6, 0)
+BLUE = (0, 0, 6)
+PINK = (3, 0, 3)
 BRICK = (12, 2, 0)
 BLACK = (0, 0, 0)
 
@@ -157,25 +157,6 @@ def Dot(x: int, y: int, color: "tuple[int, int, int]"):
     np[SCREEN_WIDTH * y + x] = color
 
 
-def rotate(t: "list[list[str]]"):
-    origin: "list[list[str]]" = []
-    for idx in range(len(t)):
-        origin.append([])
-        for ch in t[idx]:
-            origin[idx].append(ch)
-
-    t.clear()
-
-    for _ in range(len(origin[0])):
-        t.append(["  "] * len(origin))
-
-    for ch_idx in range(len(origin)):
-        for r_idx in range(len(origin[0])):
-
-            new_ch_idx = len(origin) - 1 - ch_idx
-            t[r_idx][new_ch_idx] = origin[ch_idx][r_idx]
-
-
 def is_full_row(row: "list[tuple[int, int, int]]"):
     for ch in row:
         if ch[0] == 0 and ch[1] == 0 and ch[2] == 0:
@@ -185,13 +166,17 @@ def is_full_row(row: "list[tuple[int, int, int]]"):
 
 def reduce_concrete():
     global SCORE
-    to_idx = 0
+    to_idx = len(CONCRETE) - 1
     for idx in range(len(CONCRETE) - 1, -1, -1):
         if is_full_row(CONCRETE[idx]):
-            to_idx += 1
             SCORE += 1
+        else:
+            to_idx -= 1
         if idx > to_idx:
-            CONCRETE[to_idx] = CONCRETE[idx]
+            print(idx, to_idx)
+            for c_idx in range(len(CONCRETE[idx])):
+                CONCRETE[to_idx][c_idx] = CONCRETE[idx][c_idx]
+
     for row_idx in range(to_idx):
         for c_idx in range(len(CONCRETE[row_idx])):
             CONCRETE[row_idx][c_idx] = BLACK
@@ -239,9 +224,7 @@ def concrete_checker(x: int, y: int):
     return is_free_place(CONCRETE, x, y)
 
 
-def можно_рисовать(
-    M: "list[list[str]]", x: int, y: int, can_draw=screen_checker
-) -> bool:
+def можно_рисовать(M: "list[list[str]]", x: int, y: int, can_draw=screen_checker) -> bool:
     for r_idx in range(len(M)):
         m_row = M[r_idx]
         for dot_idx in range(len(m_row)):
@@ -257,67 +240,97 @@ def draw_score(score: int):
     нарисуй_фигуру(DIGITS[second], x=4, y=0)
 
 
-JUMP = 0
+def map_direction(analog_val: int, min: int, max: int, base: int = 0):
+    v = base
+    if analog_val < 350:
+        v = min
+    elif analog_val > 640:
+        v = max
+    return v
 
 
-@run_every(ms=10)
-def check_jump():
-    global JUMP
-    JUMP = JUMP or pin8.read_digital()
+def rotate(origin: "list[list[str]]", x: int) -> "tuple[list[list[str]], int]":
+    rotated: "list[list[str]]" = []
+    shift = 0
+    for _ in origin[0]:
+        rotated.append([" "] * len(origin))
+
+    if x + len(rotated[0]) >= SCREEN_WIDTH:
+        shift = len(rotated) - len(origin)
+
+    for ch_idx in range(len(origin)):
+        for r_idx in range(len(origin[0])):
+            new_ch_idx = len(origin) - 1 - ch_idx
+            rotated[r_idx][new_ch_idx] = origin[ch_idx][r_idx]
+
+    return rotated, shift
 
 
-SCORE = 99
+SCORE = 0
 SCREEN = init_matrix()
 CONCRETE = init_matrix()
 
-X = 3
-Y = 6
-IPASS = 0
-CURRENT_T = T
 
-
-@run_every(ms=10)
 def main():
-    global JUMP, SCORE, X, Y, IPASS, CURRENT_T
+    global SCORE
 
-    if JUMP:
-        rotate(CURRENT_T)
-        JUMP = 0
-        SCORE += 1
+    JUMP = 0
 
-    if SCORE > 99:
-        # TODO: speed reset
-        SCORE = 0
+    X = 3
+    X_DIFF = 0
+    Y = 6
 
-    if IPASS == 10:
-        IPASS = 0
-        Y += 1
+    IPASS = 0
+    IPASS_DIFF = 1
+    CURRENT_T = T
+    CONCRETE_UPDATED = False
 
-    нарисуй_фигуру(I, x=3, y=28, color=BRICK, painter=concrete_dot)
-
-    reduce_concrete()
-    copy_matrix(CONCRETE, SCREEN)
-    draw_score(SCORE)
-
-    нарисуй_фигуру(HLINE, x=0, y=5, color=PINK)
-
-    # Next tetromino
-    if можно_рисовать(CURRENT_T, x=X, y=Y):
-        нарисуй_фигуру(CURRENT_T, x=X, y=Y, color=BLUE)
-    else:
-        нарисуй_фигуру(CURRENT_T, x=X, y=Y - 1, color=BRICK, painter=concrete_dot)
-        Y = 6
-        CURRENT_T = random.choice(TETRAMINOS)
-
-    render_screen(SCREEN)
-
-    np.show()
-    IPASS += 1
-
-
-def real_main():
     while True:
-        sleep(1000)
+        JUMP = JUMP or pin8.read_digital()
+        X_DIFF = X_DIFF or map_direction(pin1.read_analog(), 1, -1)
+        IPASS_DIFF = map_direction(pin2.read_analog(), 1, 10, base=1)
+
+        if SCORE > 99:
+            # TODO: speed reset
+            SCORE = 0
+
+        if IPASS >= 10:
+            IPASS = 0
+            Y += 1
+
+        if CONCRETE_UPDATED:
+            reduce_concrete()
+            CONCRETE_UPDATED = False
+        copy_matrix(CONCRETE, SCREEN)
+        draw_score(SCORE)
+
+        нарисуй_фигуру(HLINE, x=0, y=5, color=PINK)
+
+        new_x = X + X_DIFF
+        if new_x >= 0 and new_x < SCREEN_WIDTH and можно_рисовать(CURRENT_T, x=X + X_DIFF, y=Y):
+            X += X_DIFF
+        X_DIFF = 0
+
+        if JUMP:
+            new_current_t, shift = rotate(CURRENT_T, X)
+            if можно_рисовать(new_current_t, x=X + shift, y=Y):
+                CURRENT_T = new_current_t
+                X += shift
+            JUMP = 0
+
+        # Next tetromino
+        if можно_рисовать(CURRENT_T, x=X, y=Y):
+            нарисуй_фигуру(CURRENT_T, x=X, y=Y, color=BLUE)
+        else:
+            нарисуй_фигуру(CURRENT_T, x=X, y=Y - 1, color=BRICK, painter=concrete_dot)
+            Y = 6
+            CURRENT_T = random.choice(TETRAMINOS)
+            CONCRETE_UPDATED = True
+
+        render_screen(SCREEN)
+
+        np.show()
+        IPASS += IPASS_DIFF
 
 
-real_main()
+main()
