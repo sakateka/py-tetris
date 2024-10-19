@@ -27,10 +27,14 @@ $ python3 ./main.py
 # The resulting device
 
 ## Parts for assembly
-Neopixel Screen https://sl.aliexpress.ru/p?key=CVjyrVA
-Microbit https://sl.aliexpress.ru/p?key=Rqjyr9s
-MicroBit Expansion Board https://sl.aliexpress.ru/p?key=d7jyrJh
-Metal Power Bank
-Something like that, or any other compatible power supply https://sl.aliexpress.ru/p?key=8PjyrVd
+All links lead to examples of products, and are not a strict recommendation for selection. You are responsible for choosing a high-quality analogue and a reliable seller.
+
+- Neopixel Screen https://sl.aliexpress.ru/p?key=CVjyrVA
+- Microbit https://sl.aliexpress.ru/p?key=Rqjyr9s
+- MicroBit Expansion Board https://sl.aliexpress.ru/p?key=d7jyrJh
+- Dual-axis XY Joystick https://sl.aliexpress.ru/p?key=zuxCrHR
+- Roll of protective soft adhesive fabric https://sl.aliexpress.ru/p?key=3ctCrPn
+- Bunch of Female To Female Jumper Wire https://sl.aliexpress.ru/p?key=x7tCrLn
+- Power Bank - Something like that, or any other compatible power supply https://sl.aliexpress.ru/p?key=8PjyrVd
 
 ## Photo
