@@ -4,7 +4,40 @@ import neopixel
 
 SCREEN_WIDTH = 8
 SCREEN_HEIGHT = 32
-HLINE = "#" * SCREEN_WIDTH
+
+
+class Figure:
+    def __init__(self, data: bytearray, width: int):
+        self.data = data
+        self.width = width
+
+    @property
+    def height(self) -> int:
+        return len(self.data) // self.width
+
+    @staticmethod
+    def from_str(figure: str) -> "Figure":
+        lines = figure.split("\n")
+        width = len(lines[0])
+        data = bytearray("".join(lines).encode())
+        return Figure(data, width)
+
+    def rotate(self) -> "Figure":
+        rotated: Figure = Figure(self.data[:], self.height)
+
+        for row_idx in range(self.height):
+            for ch_idx in range(self.width):
+                new_ch_idx = self.height - 1 - row_idx
+                new_row_idx = ch_idx
+                new_ch = self.data[row_idx * self.width + ch_idx]
+                rotated.data[new_row_idx * rotated.width + new_ch_idx] = new_ch
+        return rotated
+
+    def __str__(self) -> str:
+        lines = []
+        for row in range(self.height):
+            lines.append(self.data[self.width * row : self.width * (row + 1)].decode())
+        return "\n".join(lines)
 
 
 class Figures:
@@ -16,13 +49,13 @@ class Figures:
 # #|  #|#  |  #|  #|  #|# #|  #|# #|  #
 ###|  #|###|###|  #|###|###|  #|###|###
 """
-        self.digits: "list[str]" = self.parse_figures(self.digits_text.strip().split("\n"))
+        self.digits: "list[Figure]" = self.parse_figures(self.digits_text.strip().split("\n"))
 
         self.tetramion_text = """
 ##| # |  #|#  | ##|## |
 ##|###|###|###|## | ##|####
 """
-        self.tetramino: "list[str]" = self.parse_figures(self.tetramion_text.strip().split("\n"))
+        self.tetramino: "list[Figure]" = self.parse_figures(self.tetramion_text.strip().split("\n"))
 
     def parse_figures(self, lines: "list[str]"):
         parts = []
@@ -36,13 +69,14 @@ class Figures:
                 part = parts[pn][n]
                 if part:
                     figure.append(part)
-            figures.append("\n".join(figure))
+            figures.append(Figure.from_str("\n".join(figure)))
         return figures
 
-    def random_tetramino(self) -> str:
+    def random_tetramino(self) -> Figure:
         return random.choice(self.tetramino)
 
 
+HLINE = Figure.from_str("#" * SCREEN_WIDTH)
 FIGURES = Figures()
 
 pin8.set_pull(pin8.PULL_UP)
@@ -106,7 +140,7 @@ def concrete_dot(x: int, y: int, color: int) -> bool:
 
 
 def нарисуй_фигуру(
-    F: str,
+    F: Figure,
     x: int,
     y: int,
     color: int = GREEN_IDX,
@@ -114,18 +148,18 @@ def нарисуй_фигуру(
 ):
     row = 0
     col = 0
-    for ch in F:
-        if ch == "#":
+    for ch in F.data:
+        if ch == ord('#'):
             if not painter(x + col, y + row, color):
                 return False
         col += 1
-        if ch == "\n":
+        if col == F.width:
             row += 1
             col = 0
     return True
 
 
-def можно_рисовать(F: str, x: int, y: int, checker=concrete_checker) -> bool:
+def можно_рисовать(F: Figure, x: int, y: int, checker=concrete_checker) -> bool:
     return нарисуй_фигуру(F, x, y, 0, checker)
 
 
@@ -144,26 +178,6 @@ def map_direction(analog_val: int, min: int, max: int, base: int = 0):
     elif analog_val > 640:
         v = max
     return v
-
-
-def rotate(origin: str) -> "tuple[str, int, int]":
-    rotated: "list[list[str]]" = []
-    lines = origin.split("\n")
-
-    origin_height = len(lines)
-    origin_width = len(lines[0])
-
-    for _ in range(origin_width):
-        rotated.append([" "] * origin_height)
-
-    for row_idx in range(origin_height):
-        for ch_idx in range(origin_width):
-            new_ch_idx = origin_height - 1 - row_idx
-            new_row_idx = ch_idx
-            new_ch = lines[row_idx][ch_idx]
-            rotated[new_row_idx][new_ch_idx] = new_ch
-
-    return "\n".join("".join(line) for line in rotated), origin_height, origin_width
 
 
 def is_full_row(row: bytearray):
@@ -255,8 +269,8 @@ def main():
         X_DIFF = 0
 
         if ROTATE:
-            rotated, new_w, new_h = rotate(curr_figure)
-            shift = new_h - new_w if X + new_w >= SCREEN_WIDTH else 0
+            rotated = curr_figure.rotate()
+            shift = rotated.height - rotated.width if X + rotated.width >= SCREEN_WIDTH else 0
 
             if можно_рисовать(curr_figure, x=X + shift, y=Y):
                 curr_figure = rotated
@@ -278,7 +292,8 @@ def main():
 
             curr_figure = next_figure
             next_figure = FIGURES.random_tetramino()
-            print(next_figure, "\n")
+            print(next_figure)
+            print("-" * 4)
             curr_color = next_color
             next_color = random.randrange(1, len(COLORS))
 
