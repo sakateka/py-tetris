@@ -4,223 +4,137 @@ import neopixel
 
 SCREEN_WIDTH = 8
 SCREEN_HEIGHT = 32
+HLINE = "#" * SCREEN_WIDTH
 
-_0 = [
-    ["#", "#", "#"],
-    ["#", " ", "#"],
-    ["#", " ", "#"],
-    ["#", " ", "#"],
-    ["#", "#", "#"],
-]
-_1 = [
-    [" ", " ", "#"],
-    [" ", "#", "#"],
-    [" ", " ", "#"],
-    [" ", " ", "#"],
-    [" ", " ", "#"],
-]
-_2 = [
-    ["#", "#", "#"],
-    [" ", " ", "#"],
-    ["#", "#", "#"],
-    ["#", " ", " "],
-    ["#", "#", "#"],
-]
-_3 = [
-    ["#", "#", "#"],
-    [" ", " ", "#"],
-    ["#", "#", "#"],
-    [" ", " ", "#"],
-    ["#", "#", "#"],
-]
-_4 = [
-    ["#", " ", "#"],
-    ["#", " ", "#"],
-    ["#", "#", "#"],
-    [" ", " ", "#"],
-    [" ", " ", "#"],
-]
-_5 = [
-    ["#", "#", "#"],
-    ["#", " ", " "],
-    ["#", "#", "#"],
-    [" ", " ", "#"],
-    ["#", "#", "#"],
-]
-_6 = [
-    ["#", "#", "#"],
-    ["#", " ", " "],
-    ["#", "#", "#"],
-    ["#", " ", "#"],
-    ["#", "#", "#"],
-]
-_7 = [
-    ["#", "#", "#"],
-    [" ", " ", "#"],
-    [" ", " ", "#"],
-    [" ", " ", "#"],
-    [" ", " ", "#"],
-]
-_8 = [
-    ["#", "#", "#"],
-    ["#", " ", "#"],
-    ["#", "#", "#"],
-    ["#", " ", "#"],
-    ["#", "#", "#"],
-]
-_9 = [
-    ["#", "#", "#"],
-    ["#", " ", "#"],
-    ["#", "#", "#"],
-    [" ", " ", "#"],
-    ["#", "#", "#"],
-]
 
-DIGITS: "list[list[list[str]]]" = [_0, _1, _2, _3, _4, _5, _6, _7, _8, _9]
+class Figures:
+    def __init__(self):
+        self.digits_text = """
+###|  #|###|###|# #|###|###|###|###|###
+# #| ##|  #|  #|# #|#  |#  |  #|# #|# #
+# #|  #|###|###|###|###|###|  #|###|###
+# #|  #|#  |  #|  #|  #|# #|  #|# #|  #
+###|  #|###|###|  #|###|###|  #|###|###
+"""
+        self.digits: "list[str]" = self.parse_figures(self.digits_text.strip().split("\n"))
 
-O = [
-    ["#", "#"],
-    ["#", "#"],
-]
+        self.tetramion_text = """
+##| # |  #|#  | ##|## |
+##|###|###|###|## | ##|####
+"""
+        self.tetramino: "list[str]" = self.parse_figures(self.tetramion_text.strip().split("\n"))
 
-I = [
-    ["#"],
-    ["#"],
-    ["#"],
-    ["#"],
-]
+    def parse_figures(self, lines: "list[str]"):
+        parts = []
+        for line in lines:
+            parts.append(line.strip().split("|"))
 
-L = [
-    ["#", " "],
-    ["#", " "],
-    ["#", "#"],
-]
+        figures = []
+        for n in range(len(parts[0])):
+            figure = []
+            for pn in range(len(parts)):
+                part = parts[pn][n]
+                if part:
+                    figure.append(part)
+            figures.append("\n".join(figure))
+        return figures
 
-J = [
-    [" ", "#"],
-    [" ", "#"],
-    ["#", "#"],
-]
+    def random_tetramino(self) -> str:
+        return random.choice(self.tetramino)
 
-S = [
-    [" ", "#", "#"],
-    ["#", "#", " "],
-]
 
-Z = [
-    ["#", "#", " "],
-    [" ", "#", "#"],
-]
-
-T = [
-    ["#", "#", "#"],
-    [" ", "#", " "],
-]
-
-TETRAMINOS = [O, I, L, J, S, Z, T]
-HLINE = [["#"] * SCREEN_WIDTH]
-
+FIGURES = Figures()
 
 pin8.set_pull(pin8.PULL_UP)
 
 np = neopixel.NeoPixel(pin0, 256)
+
+BLACK = (0, 0, 0)
+BRICK = (12, 2, 0)
 RED = (6, 0, 0)
 GREEN = (0, 6, 0)
 BLUE = (0, 0, 6)
 PINK = (3, 0, 3)
-BRICK = (12, 2, 0)
-BLACK = (0, 0, 0)
+YELLOW = (6, 6, 0)
+
+COLORS = (BLACK, BRICK, RED, GREEN, BLUE, PINK, YELLOW)
+GREEN_IDX = COLORS.index(GREEN)
+
+EMPTY_LINE = bytearray(SCREEN_WIDTH)
 
 
-def init_matrix() -> "list[list[tuple[int, int, int]]]":
-    screen = [[]] * SCREEN_HEIGHT
-    for idx in range(len(screen)):
-        screen[idx] = [BLACK] * SCREEN_WIDTH
-    return screen
+def init_matrix() -> "list[bytearray]":
+    return [EMPTY_LINE[:] for _ in range(SCREEN_HEIGHT)]
 
 
-def clear_screen(screen: "list[list[tuple[int,int,int]]]"):
-    for row in screen:
-        for i in range(len(row)):
-            row[i] = BLACK
+def copy_matrix(_from: "list[bytearray]", to: "list[bytearray]"):
+    for row_idx in range(len(_from)):
+        to[row_idx] = _from[row_idx][:]
 
 
-def render_screen(screen: "list[list[tuple[int, int, int]]]"):
+def render_screen(screen: "list[bytearray]"):
     for y in range(len(screen)):
         for x in range(len(screen[y])):
             Dot(x, y, color=screen[y][x])
+    np.show()
 
 
-def Dot(x: int, y: int, color: "tuple[int, int, int]"):
+def Dot(x: int, y: int, color: int):
     if y % 2 == 0:
         x = 7 - x
-    np[SCREEN_WIDTH * y + x] = color
+    np[SCREEN_WIDTH * y + x] = COLORS[color]
 
 
-def is_full_row(row: "list[tuple[int, int, int]]"):
-    black = 0
-    for ch in row:
-        if ch[0] == 0 and ch[1] == 0 and ch[2] == 0:
-            black += 1
-    return black == 0
-
-
-def copy_matrix(_from: "list[list[tuple]]", to: "list[list[tuple]]"):
-    for row_idx in range(len(_from)):
-        for t_idx in range(len(_from[row_idx])):
-            to[row_idx][t_idx] = _from[row_idx][t_idx]
-
-
-def screen_dot(x: int, y: int, color: "tuple[int, int, int]"):
-    SCREEN[y][x] = color
-
-
-def concrete_dot(x: int, y: int, color: "tuple[int, int, int]"):
-    CONCRETE[y][x] = color
-
-
-def нарисуй_фигуру(
-    M: "list[list[str]]",
-    x: int,
-    y: int,
-    color: "tuple[int, int, int]" = GREEN,
-    painter=screen_dot,
-):
-    for r_idx in range(len(M)):
-        m_row = M[r_idx]
-        for dot_idx in range(len(m_row)):
-            if m_row[dot_idx] == "#":
-                painter(x + dot_idx, y + r_idx, color)
-
-
-def is_free_place(matrix: "list[list[tuple[int, int, int]]]", x: int, y: int) -> bool:
+def has_color(matrix: "list[bytearray]", x: int, y: int, color: int) -> bool:
     if y < len(matrix) and x < len(matrix[y]):
-        return matrix[y][x] == BLACK
+        return matrix[y][x] == color
     return False
 
 
-def screen_checker(x: int, y: int):
-    return is_free_place(SCREEN, x, y)
+def concrete_checker(x: int, y: int, color) -> bool:
+    return has_color(CONCRETE, x, y, color)
 
 
-def concrete_checker(x: int, y: int):
-    return is_free_place(CONCRETE, x, y)
-
-
-def можно_рисовать(M: "list[list[str]]", x: int, y: int, can_draw=screen_checker) -> bool:
-    for r_idx in range(len(M)):
-        m_row = M[r_idx]
-        for dot_idx in range(len(m_row)):
-            if m_row[dot_idx] == "#" and not can_draw(x + dot_idx, y + r_idx):
-                return False
+def screen_dot(x: int, y: int, color: int) -> bool:
+    SCREEN[y][x] = color
     return True
 
 
+def concrete_dot(x: int, y: int, color: int) -> bool:
+    CONCRETE[y][x] = color
+    return True
+
+
+def нарисуй_фигуру(
+    F: str,
+    x: int,
+    y: int,
+    color: int = GREEN_IDX,
+    painter=screen_dot,
+):
+    row = 0
+    col = 0
+    for ch in F:
+        if ch == "#":
+            if not painter(x + col, y + row, color):
+                return False
+        col += 1
+        if ch == "\n":
+            row += 1
+            col = 0
+    return True
+
+
+def можно_рисовать(F: str, x: int, y: int, checker=concrete_checker) -> bool:
+    return нарисуй_фигуру(F, x, y, 0, checker)
+
+
 def draw_score(score: int):
-    score = score % 100
-    first, second = score // 10, score % 10
-    нарисуй_фигуру(DIGITS[first], x=0, y=0)
-    нарисуй_фигуру(DIGITS[second], x=4, y=0)
+    score %= 100
+    speed = score // 10
+    score %= 10
+    нарисуй_фигуру(FIGURES.digits[speed], x=0, y=0)
+    нарисуй_фигуру(FIGURES.digits[score], x=4, y=0)
 
 
 def map_direction(analog_val: int, min: int, max: int, base: int = 0):
@@ -232,108 +146,155 @@ def map_direction(analog_val: int, min: int, max: int, base: int = 0):
     return v
 
 
-def rotate(origin: "list[list[str]]", x: int) -> "tuple[list[list[str]], int]":
+def rotate(origin: str) -> "tuple[str, int, int]":
     rotated: "list[list[str]]" = []
-    shift = 0
-    for _ in origin[0]:
-        rotated.append([" "] * len(origin))
+    lines = origin.split("\n")
 
-    if x + len(rotated[0]) >= SCREEN_WIDTH:
-        shift = len(rotated) - len(origin)
+    origin_height = len(lines)
+    origin_width = len(lines[0])
 
-    for ch_idx in range(len(origin)):
-        for r_idx in range(len(origin[0])):
-            new_ch_idx = len(origin) - 1 - ch_idx
-            rotated[r_idx][new_ch_idx] = origin[ch_idx][r_idx]
+    for _ in range(origin_width):
+        rotated.append([" "] * origin_height)
 
-    return rotated, shift
+    for row_idx in range(origin_height):
+        for ch_idx in range(origin_width):
+            new_ch_idx = origin_height - 1 - row_idx
+            new_row_idx = ch_idx
+            new_ch = lines[row_idx][ch_idx]
+            rotated[new_row_idx][new_ch_idx] = new_ch
+
+    return "\n".join("".join(line) for line in rotated), origin_height, origin_width
 
 
-def reduce_concrete():
-    global SCORE
+def is_full_row(row: bytearray):
+    return all(ch != 0 for ch in row)
+
+
+def is_empty_row(row: bytearray):
+    return all(ch == 0 for ch in row)
+
+
+def reduce_concrete() -> int:
+    score = 0
     max_idx = len(CONCRETE) - 1
-    to_idx = max_idx
     for idx in range(max_idx, 5, -1):
-        full = is_full_row(CONCRETE[idx])
-        if full:
-            SCORE += 1
-        if idx < to_idx:
-            for c_idx in range(len(CONCRETE[idx])):
-                CONCRETE[to_idx][c_idx] = CONCRETE[idx][c_idx]
-        if not full:
-            to_idx -= 1
-
-    if to_idx > 0:
-        for row_idx in range(to_idx - 1, -1, -1):
-            for c_idx in range(len(CONCRETE[row_idx])):
-                CONCRETE[row_idx][c_idx] = BLACK
+        if is_full_row(CONCRETE[idx]):
+            score += 1
+            CONCRETE[idx] = EMPTY_LINE[:]
+    return score
 
 
-SCORE = 0
+def shift_concrete():
+    to_idx = SCREEN_HEIGHT - 1
+    from_idx = SCREEN_HEIGHT - 1
+    for _ in range(SCREEN_HEIGHT):
+        if is_empty_row(CONCRETE[from_idx]):
+            from_idx -= 1
+            continue
+        if from_idx != to_idx:
+            CONCRETE[to_idx] = CONCRETE[from_idx][:]
+        from_idx -= 1
+        to_idx -= 1
+
+    for idx in range(to_idx, -1, -1):
+        CONCRETE[idx] = EMPTY_LINE[:]
+
+
+def game_over(figure):
+    while True:
+        for idx in range(1, len(COLORS)):
+            нарисуй_фигуру(figure, x=INIT_X, y=INIT_Y, color=idx)
+            render_screen(SCREEN)
+            sleep(500)
+            нарисуй_фигуру(figure, x=INIT_X, y=INIT_Y, color=COLORS.index(BLACK))
+            render_screen(SCREEN)
+            sleep(500)
+
+
+INIT_X = 3
+INIT_Y = 6
+NEXT_VISIBLE_Y = INIT_Y + 5
+
 SCREEN = init_matrix()
 CONCRETE = init_matrix()
 
 
 def main():
-    global SCORE
+    SCORE = 0
+    ROTATE = 0
 
-    JUMP = 0
-
-    INIT_X = 3
-    INIT_Y = 6
     X = INIT_X
     Y = INIT_Y
     X_DIFF = 0
-
     IPASS = 0
-    IPASS_DIFF = 1
-    CURRENT_T = random.choice(TETRAMINOS)
+
+    curr_figure = FIGURES.random_tetramino()
+    next_figure = FIGURES.random_tetramino()
+    next_color = random.randrange(1, len(COLORS))
+    curr_color = random.randrange(1, len(COLORS))
+
+    reduced = 0
+
+    pink_idx = COLORS.index(PINK)
 
     while True:
-        JUMP = JUMP or pin8.read_digital()
+        ROTATE = ROTATE or pin8.read_digital()
         X_DIFF = X_DIFF or map_direction(pin1.read_analog(), 1, -1)
-        IPASS_DIFF = map_direction(pin2.read_analog(), 1, 10, base=1)
-
-        if SCORE > 99:
-            # TODO: speed reset
-            SCORE = 0
+        SPEED_BONUS = map_direction(pin2.read_analog(), 0, 10, base=0)
 
         if IPASS >= 10:
             IPASS = 0
             Y += 1
 
-        copy_matrix(CONCRETE, SCREEN)
         draw_score(SCORE)
-
-        нарисуй_фигуру(HLINE, x=0, y=5, color=PINK)
+        нарисуй_фигуру(HLINE, x=0, y=5, color=pink_idx)
 
         new_x = X + X_DIFF
-        if new_x >= 0 and new_x < SCREEN_WIDTH and можно_рисовать(CURRENT_T, x=X + X_DIFF, y=Y):
+        if new_x >= 0 and new_x < SCREEN_WIDTH and можно_рисовать(curr_figure, x=X + X_DIFF, y=Y):
             X += X_DIFF
         X_DIFF = 0
 
-        if JUMP:
-            new_current_t, shift = rotate(CURRENT_T, X)
-            if можно_рисовать(new_current_t, x=X + shift, y=Y):
-                CURRENT_T = new_current_t
-                X += shift
-            JUMP = 0
+        if ROTATE:
+            rotated, new_w, new_h = rotate(curr_figure)
+            shift = new_h - new_w if X + new_w >= SCREEN_WIDTH else 0
 
-        # Next tetromino
-        if можно_рисовать(CURRENT_T, x=X, y=Y):
-            нарисуй_фигуру(CURRENT_T, x=X, y=Y, color=BLUE)
+            if можно_рисовать(curr_figure, x=X + shift, y=Y):
+                curr_figure = rotated
+                X += shift
+            ROTATE = 0
+
+        if Y > NEXT_VISIBLE_Y:
+            нарисуй_фигуру(next_figure, x=INIT_X, y=INIT_Y, color=next_color)
+
+        if можно_рисовать(curr_figure, x=X, y=Y):
+            нарисуй_фигуру(curr_figure, x=X, y=Y, color=curr_color)
         else:
-            print("x = ", X, "y = ", Y)
-            нарисуй_фигуру(CURRENT_T, x=X, y=Y - 1, color=BRICK, painter=concrete_dot)
+            нарисуй_фигуру(curr_figure, x=X, y=Y - 1, color=curr_color)
+            нарисуй_фигуру(curr_figure, x=X, y=Y - 1, color=curr_color, painter=concrete_dot)
             X = INIT_X
-            Y = INIT_Y
-            CURRENT_T = random.choice(TETRAMINOS)
-            reduce_concrete()
+            Y = INIT_Y + 1
+            if not можно_рисовать(curr_figure, x=X, y=Y):
+                game_over(curr_figure)
+
+            curr_figure = next_figure
+            next_figure = FIGURES.random_tetramino()
+            print(next_figure, "\n")
+            curr_color = next_color
+            next_color = random.randrange(1, len(COLORS))
+
+            reduced = reduce_concrete()
+            SCORE += reduced
 
         render_screen(SCREEN)
+        copy_matrix(CONCRETE, SCREEN)
+        if reduced:
+            shift_concrete()
+            reduced = 0
 
-        np.show()
-        IPASS += IPASS_DIFF
+        if SCORE > 99:
+            SCORE = 0
+        IPASS += max(1, SCORE // 10) + SPEED_BONUS
+        sleep(10)
 
 
 main()
