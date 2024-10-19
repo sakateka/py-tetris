@@ -94,22 +94,22 @@ YELLOW = (6, 6, 0)
 COLORS = (BLACK, BRICK, RED, GREEN, BLUE, PINK, YELLOW)
 GREEN_IDX = COLORS.index(GREEN)
 
-EMPTY_LINE = bytearray(SCREEN_WIDTH)
+
+def init_matrix() -> bytearray:
+    return bytearray(SCREEN_WIDTH * SCREEN_HEIGHT)
 
 
-def init_matrix() -> "list[bytearray]":
-    return [EMPTY_LINE[:] for _ in range(SCREEN_HEIGHT)]
+def copy_matrix(_from: bytearray, to: bytearray, from_idx=0, to_idx=0, length=-1):
+    if length == -1:
+        length = len(_from)
+    for idx in range(length):
+        to[to_idx + idx] = _from[from_idx + idx]
 
 
-def copy_matrix(_from: "list[bytearray]", to: "list[bytearray]"):
-    for row_idx in range(len(_from)):
-        to[row_idx] = _from[row_idx][:]
-
-
-def render_screen(screen: "list[bytearray]"):
-    for y in range(len(screen)):
-        for x in range(len(screen[y])):
-            Dot(x, y, color=screen[y][x])
+def render_screen(screen: bytearray):
+    for x in range(SCREEN_WIDTH):
+        for y in range(SCREEN_HEIGHT):
+            Dot(x, y, color=screen[y * SCREEN_WIDTH + x])
     np.show()
 
 
@@ -119,23 +119,19 @@ def Dot(x: int, y: int, color: int):
     np[SCREEN_WIDTH * y + x] = COLORS[color]
 
 
-def has_color(matrix: "list[bytearray]", x: int, y: int, color: int) -> bool:
-    if y < len(matrix) and x < len(matrix[y]):
-        return matrix[y][x] == color
+def concrete_checker(x: int, y: int, color) -> bool:
+    if x < SCREEN_WIDTH and y < SCREEN_HEIGHT:
+        return CONCRETE[y * SCREEN_WIDTH + x] == color
     return False
 
 
-def concrete_checker(x: int, y: int, color) -> bool:
-    return has_color(CONCRETE, x, y, color)
-
-
 def screen_dot(x: int, y: int, color: int) -> bool:
-    SCREEN[y][x] = color
+    SCREEN[y * SCREEN_WIDTH + x] = color
     return True
 
 
 def concrete_dot(x: int, y: int, color: int) -> bool:
-    CONCRETE[y][x] = color
+    CONCRETE[y * SCREEN_WIDTH + x] = color
     return True
 
 
@@ -180,21 +176,34 @@ def map_direction(analog_val: int, min: int, max: int, base: int = 0):
     return v
 
 
-def is_full_row(row: bytearray):
-    return all(ch != 0 for ch in row)
+def is_full(m: bytearray, start: int, length: int):
+    for offset in range(length):
+        if m[start + offset] == 0:
+            return False
+    return True
 
 
-def is_empty_row(row: bytearray):
-    return all(ch == 0 for ch in row)
+def is_empty(m: bytearray, start: int, length: int):
+    for offset in range(length):
+        if m[start + offset] != 0:
+            return False
+    return True
+
+
+def clear(m: bytearray, from_idx=0, to_idx=-1):
+    if to_idx == -1:
+        to_idx = len(m)
+    for idx in range(from_idx, to_idx):
+        m[idx] = 0
 
 
 def reduce_concrete() -> int:
     score = 0
-    max_idx = len(CONCRETE) - 1
-    for idx in range(max_idx, 5, -1):
-        if is_full_row(CONCRETE[idx]):
+    for idx in range(SCREEN_HEIGHT, 5, -1):
+        row_start = (idx - 1) * SCREEN_WIDTH
+        if is_full(CONCRETE, row_start, SCREEN_WIDTH):
             score += 1
-            CONCRETE[idx] = EMPTY_LINE[:]
+            clear(CONCRETE, row_start, row_start + SCREEN_WIDTH)
     return score
 
 
@@ -202,16 +211,18 @@ def shift_concrete():
     to_idx = SCREEN_HEIGHT - 1
     from_idx = SCREEN_HEIGHT - 1
     for _ in range(SCREEN_HEIGHT):
-        if is_empty_row(CONCRETE[from_idx]):
+        row_from_start = from_idx * SCREEN_WIDTH
+        if is_empty(CONCRETE, row_from_start, SCREEN_WIDTH):
             from_idx -= 1
             continue
         if from_idx != to_idx:
-            CONCRETE[to_idx] = CONCRETE[from_idx][:]
+            row_to_start = to_idx * SCREEN_WIDTH
+            copy_matrix(CONCRETE, CONCRETE, row_from_start, row_to_start, SCREEN_WIDTH)
         from_idx -= 1
         to_idx -= 1
 
-    for idx in range(to_idx, -1, -1):
-        CONCRETE[idx] = EMPTY_LINE[:]
+    # +1 to compensate last for loop iteration
+    clear(CONCRETE, to_idx=(to_idx + 1) * SCREEN_WIDTH)
 
 
 def game_over(figure):
@@ -272,7 +283,7 @@ def main():
             rotated = curr_figure.rotate()
             shift = rotated.height - rotated.width if X + rotated.width >= SCREEN_WIDTH else 0
 
-            if можно_рисовать(curr_figure, x=X + shift, y=Y):
+            if можно_рисовать(rotated, x=X + shift, y=Y):
                 curr_figure = rotated
                 X += shift
             ROTATE = 0
