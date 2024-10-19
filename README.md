@@ -37,4 +37,10 @@ All links lead to examples of products, and are not a strict recommendation for 
 - Bunch of Female To Female Jumper Wire https://sl.aliexpress.ru/p?key=x7tCrLn
 - Power Bank - Something like that, or any other compatible power supply https://sl.aliexpress.ru/p?key=8PjyrVd
 
-## Photo
+## Flashing the device
+Use Web IDE https://python.microbit.org/v/3
+
+## Photo of the result
+
+![IMG_20241019_201200_931](https://github.com/user-attachments/assets/fb7825d7-918c-4ba2-9a8f-b0c3114cc4f3)
+
