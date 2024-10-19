@@ -42,5 +42,5 @@ Use Web IDE https://python.microbit.org/v/3
 
 ## Photo of the result
 
-![IMG_20241019_201200_931](https://github.com/user-attachments/assets/fb7825d7-918c-4ba2-9a8f-b0c3114cc4f3)
+<img src="https://github.com/user-attachments/assets/fb7825d7-918c-4ba2-9a8f-b0c3114cc4f3" height="600">
 
