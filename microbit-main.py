@@ -1,13 +1,15 @@
 from microbit import *
 import random
 import neopixel
+import speech
+
 
 SCREEN_WIDTH = 8
 SCREEN_HEIGHT = 32
 
 
 class Figure:
-    def __init__(self, data: bytearray, width: int):
+    def __init__(self, data: memoryview, width: int):
         self.data = data
         self.width = width
 
@@ -20,10 +22,15 @@ class Figure:
         lines = figure.split("\n")
         width = len(lines[0])
         data = bytearray("".join(lines).encode())
-        return Figure(data, width)
+        return Figure(
+            memoryview(
+                data,
+            ),
+            width,
+        )
 
     def rotate(self) -> "Figure":
-        rotated: Figure = Figure(self.data[:], self.height)
+        rotated: Figure = Figure(memoryview(bytearray(self.data)), self.height)
 
         for row_idx in range(self.height):
             for ch_idx in range(self.width):
@@ -36,7 +43,7 @@ class Figure:
     def __str__(self) -> str:
         lines = []
         for row in range(self.height):
-            lines.append(self.data[self.width * row : self.width * (row + 1)].decode())
+            lines.append(bytes(self.data[self.width * row : self.width * (row + 1)]).decode())
         return "\n".join(lines)
 
 
@@ -95,18 +102,16 @@ COLORS = (BLACK, BRICK, RED, GREEN, BLUE, PINK, YELLOW)
 GREEN_IDX = COLORS.index(GREEN)
 
 
-def init_matrix() -> bytearray:
-    return bytearray(SCREEN_WIDTH * SCREEN_HEIGHT)
+def init_matrix() -> memoryview:
+    return memoryview(bytearray(SCREEN_WIDTH * SCREEN_HEIGHT))
 
 
-def copy_matrix(_from: bytearray, to: bytearray, from_idx=0, to_idx=0, length=-1):
-    if length == -1:
-        length = len(_from)
-    for idx in range(length):
-        to[to_idx + idx] = _from[from_idx + idx]
+def copy_matrix(_from: memoryview, to: memoryview):
+    for idx in range(len(_from)):
+        to[idx] = _from[idx]
 
 
-def render_screen(screen: bytearray):
+def render_screen(screen: memoryview):
     for x in range(SCREEN_WIDTH):
         for y in range(SCREEN_HEIGHT):
             Dot(x, y, color=screen[y * SCREEN_WIDTH + x])
@@ -176,24 +181,16 @@ def map_direction(analog_val: int, min: int, max: int, base: int = 0):
     return v
 
 
-def is_full(m: bytearray, start: int, length: int):
-    for offset in range(length):
-        if m[start + offset] == 0:
-            return False
-    return True
+def is_full(m: memoryview):
+    return all(b != 0 for b in m)
 
 
-def is_empty(m: bytearray, start: int, length: int):
-    for offset in range(length):
-        if m[start + offset] != 0:
-            return False
-    return True
+def is_empty(m: memoryview):
+    return all(b == 0 for b in m)
 
 
-def clear(m: bytearray, from_idx=0, to_idx=-1):
-    if to_idx == -1:
-        to_idx = len(m)
-    for idx in range(from_idx, to_idx):
+def clear(m: memoryview):
+    for idx in range(len(m)):
         m[idx] = 0
 
 
@@ -201,9 +198,9 @@ def reduce_concrete() -> int:
     score = 0
     for idx in range(SCREEN_HEIGHT, 5, -1):
         row_start = (idx - 1) * SCREEN_WIDTH
-        if is_full(CONCRETE, row_start, SCREEN_WIDTH):
+        if is_full(CONCRETE[row_start : row_start + SCREEN_WIDTH]):
             score += 1
-            clear(CONCRETE, row_start, row_start + SCREEN_WIDTH)
+            clear(CONCRETE[row_start : row_start + SCREEN_WIDTH])
     return score
 
 
@@ -212,20 +209,23 @@ def shift_concrete():
     from_idx = SCREEN_HEIGHT - 1
     for _ in range(SCREEN_HEIGHT):
         row_from_start = from_idx * SCREEN_WIDTH
-        if is_empty(CONCRETE, row_from_start, SCREEN_WIDTH):
+        row_from_end = row_from_start + SCREEN_WIDTH
+        if is_empty(CONCRETE[row_from_start : row_from_start + SCREEN_WIDTH]):
             from_idx -= 1
             continue
         if from_idx != to_idx:
             row_to_start = to_idx * SCREEN_WIDTH
-            copy_matrix(CONCRETE, CONCRETE, row_from_start, row_to_start, SCREEN_WIDTH)
+            row_to_end = row_to_start + SCREEN_WIDTH
+            copy_matrix(CONCRETE[row_from_start:row_from_end], CONCRETE[row_to_start:row_to_end])
         from_idx -= 1
         to_idx -= 1
 
     # +1 to compensate last for loop iteration
-    clear(CONCRETE, to_idx=(to_idx + 1) * SCREEN_WIDTH)
+    clear(CONCRETE[0 : (to_idx + 1) * SCREEN_WIDTH])
 
 
 def game_over(figure):
+    speech.sing(speech.translate("Game over"))
     while True:
         for idx in range(1, len(COLORS)):
             нарисуй_фигуру(figure, x=INIT_X, y=INIT_Y, color=idx)
