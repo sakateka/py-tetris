@@ -1,7 +1,6 @@
 from microbit import *
 import random
 import neopixel
-import speech
 
 
 SCREEN_WIDTH = 8
@@ -225,7 +224,6 @@ def shift_concrete():
 
 
 def game_over(figure):
-    speech.sing(speech.translate("Game over"))
     while True:
         for idx in range(1, len(COLORS)):
             нарисуй_фигуру(figure, x=INIT_X, y=INIT_Y, color=idx)
