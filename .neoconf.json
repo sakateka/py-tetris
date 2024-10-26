@@ -1,0 +1,10 @@
+{
+    "lspconfig": {
+        "pyright": {
+            "python.analysis.stubPath": "./micropython-microbit-stubs/lang/en/typeshed/stdlib",
+            "python.analysis.diagnosticSeverityOverrides": {
+                "reportMissingModuleSource": false
+            }
+        }
+    }
+ }
