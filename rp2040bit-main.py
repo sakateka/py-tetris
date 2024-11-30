@@ -1,3 +1,4 @@
+import micropython
 from machine import Pin, ADC
 import time
 import random
@@ -6,6 +7,8 @@ import neopixel
 
 SCREEN_WIDTH = 8
 SCREEN_HEIGHT = 32
+
+micropython.alloc_emergency_exception_buf(100)
 
 
 class Figure:
@@ -85,10 +88,6 @@ class Figures:
 
 HLINE = Figure.from_str("#" * SCREEN_WIDTH)
 FIGURES = Figures()
-
-BUTTON = Pin(16, Pin.IN, Pin.PULL_UP)
-X_AXIS = ADC(27)
-Y_AXIS = ADC(28)
 
 np = neopixel.NeoPixel(Pin(13), 256)
 
@@ -231,10 +230,10 @@ def game_over(figure):
         for idx in range(1, len(COLORS)):
             нарисуй_фигуру(figure, x=INIT_X, y=INIT_Y, color=idx)
             render_screen(SCREEN)
-            time.sleep(0.500)
+            time.sleep_ms(500)
             нарисуй_фигуру(figure, x=INIT_X, y=INIT_Y, color=COLORS.index(BLACK))
             render_screen(SCREEN)
-            time.sleep(0.500)
+            time.sleep_ms(500)
 
 
 INIT_X = 3
@@ -244,10 +243,24 @@ NEXT_VISIBLE_Y = INIT_Y + 5
 SCREEN = init_matrix()
 CONCRETE = init_matrix()
 
+DEBOUNCE = 200
+BUTTON_PRESS_COUNT = 0
+DEBOUNCE_TIME = 0
+BUTTON = Pin(16, Pin.IN, Pin.PULL_UP)
+def button_callback(_):
+    global BUTTON_PRESS_COUNT, DEBOUNCE_TIME
+    if (time.ticks_ms() - DEBOUNCE_TIME) > DEBOUNCE:
+        BUTTON_PRESS_COUNT = 1
+        DEBOUNCE_TIME = time.ticks_ms()
+BUTTON.irq(trigger=Pin.IRQ_RISING, handler=button_callback)
+
+X_AXIS = ADC(27)
+Y_AXIS = ADC(28)
 
 def main():
+    global BUTTON_PRESS_COUNT
+
     SCORE = 0
-    ROTATE = 0
 
     X = INIT_X
     Y = INIT_Y
@@ -264,7 +277,6 @@ def main():
     pink_idx = COLORS.index(PINK)
 
     while True:
-        ROTATE = ROTATE or BUTTON.value()
         X_DIFF = X_DIFF or map_direction(X_AXIS.read_u16(), 1, -1)
         SPEED_BONUS = map_direction(Y_AXIS.read_u16(), 0, 10, base=0)
 
@@ -280,14 +292,14 @@ def main():
             X += X_DIFF
         X_DIFF = 0
 
-        if ROTATE:
+        if BUTTON_PRESS_COUNT:
+            BUTTON_PRESS_COUNT = 0
             rotated = curr_figure.rotate()
             shift = rotated.height - rotated.width if X + rotated.width >= SCREEN_WIDTH else 0
 
             if можно_рисовать(rotated, x=X + shift, y=Y):
                 curr_figure = rotated
                 X += shift
-            ROTATE = 0
 
         if Y > NEXT_VISIBLE_Y:
             нарисуй_фигуру(next_figure, x=INIT_X, y=INIT_Y, color=next_color)
@@ -321,7 +333,7 @@ def main():
         if SCORE > 99:
             SCORE = 0
         IPASS += max(1, SCORE // 10) + SPEED_BONUS
-        time.sleep(0.02)
+        time.sleep_ms(50)
 
 
 main()
