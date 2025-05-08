@@ -137,7 +137,7 @@ class FrameBuffer():
             for col in range(figure.width):
                 ch = figure.get(col, row)
                 if ch:
-                    self.set(x + col, y + row, ch if not color else color)
+                    self.set(x + col, y + row, ch if color is None else color)
 
 
 def is_full(m: memoryview):
@@ -395,6 +395,9 @@ class Dot():
     def is_opposite(self, other) -> bool:
         return (self + other).is_zero()
 
+    def opposite(self) -> "Dot":
+        return Dot(-self.x, -self.y)
+
     def __sub__(self, other) -> "Dot":
         return Dot(self.x - other.x, self.y - other.y)
 
@@ -464,11 +467,12 @@ class Tank():
     def fire(self):
         self.missiles.append(Missile(self.pos + Dot(1, 1), self.direction, group=self.origin))
 
-    def move(self, direction: Dot, collides):
-        if not direction.is_zero() and not self.rotate(direction):
-            pos = self.pos + direction
-            if not collides(pos.x, pos.y, self.figure):
-                self.pos = pos
+    def move(self, direction: Dot, collides, allow_backword=False):
+        if not direction.is_zero():
+            if (allow_backword and self.direction.is_opposite(direction)) or not self.rotate(direction):
+                pos = self.pos + direction
+                if not collides(pos.x, pos.y, self.figure):
+                    self.pos = pos
     
     def move_missiles(self):
         visible_idx = 0 
@@ -507,7 +511,8 @@ class Tanks():
     STAGE_FIRE = 3
     STAGE_NONE = 4
     STAGES = (
-        STAGE_SPAWN, STAGE_MOVE,
+        STAGE_SPAWN,
+        STAGE_MOVE, STAGE_MOVE,
         STAGE_ROTATE, STAGE_ROTATE,
         STAGE_FIRE, STAGE_FIRE, STAGE_FIRE,
     )
@@ -526,6 +531,7 @@ class Tanks():
 
     def run(self):
         step = 10
+        round = 10
         while True:
             self.screen.clear()
             self.draw_score()
@@ -560,7 +566,8 @@ class Tanks():
                 self.game_over()
                 return
 
-            if step == 10:
+            speedup = self.score // 10
+            if step >= round - speedup:
                 self.ai()
                 step = 0
             step += 1
@@ -570,35 +577,44 @@ class Tanks():
     def ai(self):
 
         stage = Tanks.STAGE_SPAWN
-        if len(self.enemies) > 0:
+        if len(self.enemies) > 1:
             stage = random.choice(Tanks.STAGES)
 
         if stage == Tanks.STAGE_SPAWN:
             if len(self.enemies) == 4:
                 return
-            idx = random.choice(range(0, len(self.spawns)))
+
+            idx = random.choice(range(len(self.spawns)))
             is_used = any(idx == e.origin for e in self.enemies)
             if not is_used:
                 pos = self.spawns[idx]
                 self.enemies.append(Tank(pos, lives=1, origin=idx))
                 return
-
-        elif stage == Tanks.STAGE_MOVE:
-            if len(self.enemies) == 0:
+        elif stage == Tanks.STAGE_NONE:
+            return
+        else:
+            tank: Tank = random.choice(self.enemies)
+            if tank.is_dying():
                 return
 
-            tank = random.choice(self.enemies)
-            direction = random.choice(tank.rotations)
-            tank.move(direction, self.screen.collides)
+            if stage == Tanks.STAGE_MOVE:
+                self.remove_tank(tank)
 
-        elif stage == Tanks.STAGE_FIRE:
-            tank = random.choice(self.enemies)
-            tank.fire()
+                direction = tank.direction
+                pos = tank.pos + direction
+                if self.screen.collides(pos.x, pos.y, tank.figure):
+                    direction = direction.opposite()
+                tank.move(direction, self.screen.collides, allow_backword=True)
 
-        elif stage == Tanks.STAGE_ROTATE:
-            tank = random.choice(self.enemies)
-            direction = random.choice(tank.rotations)
-            tank.rotate(direction)
+            elif stage == Tanks.STAGE_FIRE:
+                tank.fire()
+
+            elif stage == Tanks.STAGE_ROTATE:
+                direction = random.choice(tank.rotations)
+                tank.rotate(direction)
+
+    def remove_tank(self, tank: Tank):
+        self.screen.draw(tank.pos.x, tank.pos.y, tank.figure, BLACK_IDX)
 
     def draw_missiles(self, missiles):
         for m in missiles:
@@ -640,15 +656,15 @@ class Tanks():
     def draw_lives(self):
         y = 5
         x = 0
-        for _ in range(0, self.tank.lives):
+        for _ in range(self.tank.lives):
             self.screen.set(x, y, LIGHT_BLUE_IDX)
             x += 2
 
     def game_over(self):
         while not joy.was_pressed():
-            x = random.randrange(0, SCREEN_WIDTH)
+            x = random.randrange(SCREEN_WIDTH)
             y = random.randrange(6, SCREEN_HEIGHT)
-            color = random.choice(range(0, len(COLORS)))
+            color = random.choice(range(len(COLORS)))
             self.screen.set(x, y, color)
             self.screen.render()
             time.sleep_ms(50)
@@ -748,8 +764,8 @@ class Snake():
 
     def respawn_apple(self):
         if self.apple is None:
-            x = random.randrange(0, SCREEN_WIDTH)
-            y = random.randrange(0, SCREEN_HEIGHT)
+            x = random.randrange(SCREEN_WIDTH)
+            y = random.randrange(SCREEN_HEIGHT)
             if self.screen.get(x, y) == BLACK_IDX:
                 self.apple = Dot(x, y)
 
@@ -768,7 +784,7 @@ class Snake():
                 self.apple = None
                 return True # Eat the apple
 
-        for idx in range(0, len(self.body) - 1):
+        for idx in range(len(self.body) - 1):
             self.body[idx] = self.body[idx+1]
         self.body[head_idx] = dot
 
