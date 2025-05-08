@@ -1,3 +1,5 @@
 venv
 microbit-stub
 .nolint
+.lock
+__pycache__/
