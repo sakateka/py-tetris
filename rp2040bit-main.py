@@ -575,41 +575,236 @@ class Tanks():
             time.sleep_ms(50)
 
     def ai(self):
-
+        # Enhanced AI with better decision making
         stage = Tanks.STAGE_SPAWN
         if len(self.enemies) > 1:
-            stage = random.choice(Tanks.STAGES)
+            # Weight stages based on game state
+            weighted_stages = []
+            
+            # More aggressive when player has fewer lives
+            if self.tank.lives <= 1:
+                weighted_stages.extend([Tanks.STAGE_FIRE] * 4)
+                weighted_stages.extend([Tanks.STAGE_MOVE] * 2)
+            else:
+                weighted_stages.extend([Tanks.STAGE_FIRE] * 2)
+                weighted_stages.extend([Tanks.STAGE_MOVE] * 3)
+            
+            weighted_stages.extend([Tanks.STAGE_ROTATE] * 2)
+            weighted_stages.append(Tanks.STAGE_NONE)
+            
+            stage = random.choice(weighted_stages)
 
         if stage == Tanks.STAGE_SPAWN:
-            if len(self.enemies) == 4:
+            if len(self.enemies) >= 4:
                 return
-
-            idx = random.choice(range(len(self.spawns)))
-            is_used = any(idx == e.origin for e in self.enemies)
-            if not is_used:
-                pos = self.spawns[idx]
-                self.enemies.append(Tank(pos, lives=1, origin=idx))
-                return
+            
+            # Smart spawning - prefer spawns closer to player
+            spawn_priorities = []
+            player_pos = self.tank.pos
+            
+            for idx, spawn_pos in enumerate(self.spawns):
+                is_used = any(idx == e.origin for e in self.enemies)
+                if not is_used:
+                    # Calculate distance to player (Manhattan distance)
+                    distance = abs(spawn_pos.x - player_pos.x) + abs(spawn_pos.y - player_pos.y)
+                    # Closer spawns get higher priority (lower distance = higher priority)
+                    priority = 100 - distance
+                    spawn_priorities.append((idx, priority))
+            
+            if spawn_priorities:
+                # Weighted random selection favoring closer spawns
+                total_weight = sum(priority for _, priority in spawn_priorities)
+                if total_weight > 0:
+                    rand_val = random.randrange(total_weight)
+                    current_weight = 0
+                    for idx, priority in spawn_priorities:
+                        current_weight += priority
+                        if rand_val < current_weight:
+                            pos = self.spawns[idx]
+                            self.enemies.append(Tank(pos, lives=1, origin=idx))
+                            return
+                            
         elif stage == Tanks.STAGE_NONE:
             return
         else:
-            tank: Tank = random.choice(self.enemies)
-            if tank.is_dying():
+            # Select tank based on strategic priority
+            active_tanks = [t for t in self.enemies if not t.is_dying()]
+            if not active_tanks:
                 return
+                
+            # Prioritize tanks that can see the player or are closer
+            tank_priorities = []
+            player_pos = self.tank.pos
+            
+            for tank in active_tanks:
+                priority = 1
+                
+                # Higher priority for tanks closer to player
+                distance = abs(tank.pos.x - player_pos.x) + abs(tank.pos.y - player_pos.y)
+                priority += max(0, 20 - distance)
+                
+                # Higher priority for tanks that can hit player in current direction
+                if self.can_hit_player(tank):
+                    priority += 15
+                
+                # Higher priority for tanks with clear line of sight
+                if self.has_line_of_sight(tank, player_pos):
+                    priority += 10
+                
+                tank_priorities.append((tank, priority))
+            
+            # Weighted selection
+            total_weight = sum(priority for _, priority in tank_priorities)
+            if total_weight <= 0:
+                tank = random.choice(active_tanks)
+            else:
+                rand_val = random.randrange(total_weight)
+                current_weight = 0
+                tank = active_tanks[0]  # fallback
+                for t, priority in tank_priorities:
+                    current_weight += priority
+                    if rand_val < current_weight:
+                        tank = t
+                        break
 
             if stage == Tanks.STAGE_MOVE:
-                self.remove_tank(tank)
-
-                direction = tank.direction
-                pos = tank.pos + direction
-                if self.screen.collides(pos.x, pos.y, tank.figure):
-                    direction = direction.opposite()
-                tank.move(direction, self.screen.collides, allow_backword=True)
-
+                self.smart_move(tank)
             elif stage == Tanks.STAGE_FIRE:
-                tank.fire()
-
+                # Only fire if there's a good chance to hit
+                if self.should_fire(tank):
+                    tank.fire()
             elif stage == Tanks.STAGE_ROTATE:
+                self.smart_rotate(tank)
+
+    def can_hit_player(self, tank: Tank) -> bool:
+        """Check if tank can potentially hit player in current direction"""
+        direction = tank.direction
+        pos = tank.pos + Dot(1, 1)  # Tank center
+        player_center = self.tank.pos + Dot(1, 1)
+        
+        # Check if player is in the same line as tank's direction
+        if direction.x != 0:  # Horizontal movement
+            return (pos.y == player_center.y and
+                   ((direction.x > 0 and pos.x < player_center.x) or
+                    (direction.x < 0 and pos.x > player_center.x)))
+        elif direction.y != 0:  # Vertical movement
+            return (pos.x == player_center.x and
+                   ((direction.y > 0 and pos.y < player_center.y) or
+                    (direction.y < 0 and pos.y > player_center.y)))
+        return False
+
+    def has_line_of_sight(self, tank: Tank, target_pos: Dot) -> bool:
+        """Check if tank has clear line of sight to target"""
+        tank_center = tank.pos + Dot(1, 1)
+        target_center = target_pos + Dot(1, 1)
+        
+        # Simple line of sight - check if target is in cardinal directions
+        dx = target_center.x - tank_center.x
+        dy = target_center.y - tank_center.y
+        
+        # Must be in cardinal direction (horizontal or vertical line)
+        if dx != 0 and dy != 0:
+            return False
+            
+        # Check for obstacles in the path (simplified)
+        steps = max(abs(dx), abs(dy))
+        if steps == 0:
+            return True
+            
+        step_x = 0 if dx == 0 else (1 if dx > 0 else -1)
+        step_y = 0 if dy == 0 else (1 if dy > 0 else -1)
+        
+        # Check a few points along the path
+        for i in range(1, min(steps, 5)):
+            check_pos = Dot(tank_center.x + i * step_x, tank_center.y + i * step_y)
+            if self.screen.collides(check_pos.x, check_pos.y, tank.figure):
+                return False
+                
+        return True
+
+    def should_fire(self, tank: Tank) -> bool:
+        """Determine if tank should fire based on strategic considerations"""
+        # Fire if can hit player
+        if self.can_hit_player(tank):
+            return True
+            
+        # Fire randomly but less frequently if no clear shot
+        return random.randrange(10) == 0
+
+    def smart_move(self, tank: Tank):
+        """Enhanced movement AI with pathfinding towards player"""
+        self.remove_tank(tank)
+        
+        player_pos = self.tank.pos
+        tank_pos = tank.pos
+        
+        # Calculate direction towards player
+        dx = player_pos.x - tank_pos.x
+        dy = player_pos.y - tank_pos.y
+        
+        # Prefer moving towards player
+        preferred_directions = []
+        
+        if abs(dx) > abs(dy):
+            # Horizontal movement preferred
+            if dx > 0:
+                preferred_directions.append(Dot(1, 0))
+            else:
+                preferred_directions.append(Dot(-1, 0))
+            # Add vertical as secondary
+            if dy > 0:
+                preferred_directions.append(Dot(0, 1))
+            elif dy < 0:
+                preferred_directions.append(Dot(0, -1))
+        else:
+            # Vertical movement preferred
+            if dy > 0:
+                preferred_directions.append(Dot(0, 1))
+            else:
+                preferred_directions.append(Dot(0, -1))
+            # Add horizontal as secondary
+            if dx > 0:
+                preferred_directions.append(Dot(1, 0))
+            elif dx < 0:
+                preferred_directions.append(Dot(-1, 0))
+        
+        # Try preferred directions first
+        for direction in preferred_directions:
+            pos = tank.pos + direction
+            if not self.screen.collides(pos.x, pos.y, tank.figure):
+                tank.move(direction, self.screen.collides, allow_backword=True)
+                return
+        
+        # If no preferred direction works, try current direction or reverse
+        direction = tank.direction
+        pos = tank.pos + direction
+        if self.screen.collides(pos.x, pos.y, tank.figure):
+            direction = direction.opposite()
+        tank.move(direction, self.screen.collides, allow_backword=True)
+
+    def smart_rotate(self, tank: Tank):
+        """Enhanced rotation AI to face towards player"""
+        player_pos = self.tank.pos
+        tank_pos = tank.pos
+        
+        # Calculate direction towards player
+        dx = player_pos.x - tank_pos.x
+        dy = player_pos.y - tank_pos.y
+        
+        # Choose best direction to face player
+        if abs(dx) > abs(dy):
+            # Face horizontally
+            target_direction = Dot(1 if dx > 0 else -1, 0)
+        else:
+            # Face vertically
+            target_direction = Dot(0, 1 if dy > 0 else -1)
+        
+        # Rotate towards target direction
+        if tank.direction != target_direction:
+            tank.rotate(target_direction)
+        else:
+            # Already facing player, occasionally rotate randomly for unpredictability
+            if random.randrange(4) == 0:
                 direction = random.choice(tank.rotations)
                 tank.rotate(direction)
 
@@ -691,36 +886,203 @@ class Races():
             b"\0\3\0"
             b"\3\3\3"
         ), width=3)
+        
+        # New features
+        self.lives = 3
+        self.score = 0
+        self.obstacles = []  # List of obstacle positions
+        self.bullets = []    # List of bullet positions
+        self.obstacle_spawn_counter = 0
+        self.invulnerable_time = 0  # Invulnerability frames after hit
+        
+        # Obstacle figure
+        self.obstacle = Figure(bytearray(
+            b"\2\2\2"
+            b"\2\0\2"
+            b"\2\2\2"
+        ), width=3)
 
     def run(self):
         step = 5
         pos = Dot(3, 27)
 
         while True:
+            # Handle input
             x = joy.read_x()
             y = joy.read_y()
             if x and y:
                 y = 0
 
+            # Move car
             new_pos = Dot(pos.x + x, pos.y + y)
-            if not self.screen.collides(new_pos.x, new_pos.y, self.car):
+            if not self.road.collides(new_pos.x, new_pos.y, self.car):
                 pos = new_pos
 
-            self.screen.draw(pos.x, pos.y, self.car)
-            self.screen.render()
-            self.screen.copy_from(self.road)
+            # Shooting
+            if joy.was_pressed():
+                self.bullets.append(Dot(pos.x + 1, pos.y - 1))  # Shoot from car center
 
+            # Update game state
+            self.update_bullets()
+            self.update_obstacles()
+            self.check_collisions(pos)
+            
+            # Draw everything
+            self.screen.copy_from(self.road)
+            self.draw_obstacles()
+            self.draw_bullets()
+            
+            # Draw car (flash if invulnerable)
+            if self.invulnerable_time <= 0 or self.invulnerable_time % 4 < 2:
+                self.screen.draw(pos.x, pos.y, self.car)
+            
+            self.draw_ui()
+            self.screen.render()
+
+            # Check game over
+            if self.lives <= 0:
+                self.game_over()
+                return
+
+            # Scroll road and spawn obstacles
             if step >= 5:
                 step = 0
+                self.scroll_road()
+                self.spawn_obstacles()
 
-                left_pixel = self.road.get(0, SCREEN_HEIGHT-1)
-                right_pixel = self.road.get(SCREEN_WIDTH - 1, SCREEN_HEIGHT-1)
-                self.road.shift_right(1)
-                self.road.set(0, 0, left_pixel)
-                self.road.set(SCREEN_WIDTH - 1, 0, right_pixel)
-
+            # Update counters
+            if self.invulnerable_time > 0:
+                self.invulnerable_time -= 1
             step += 1
             time.sleep_ms(20)
+
+    def scroll_road(self):
+        """Scroll the road and move obstacles"""
+        left_pixel = self.road.get(0, SCREEN_HEIGHT-1)
+        right_pixel = self.road.get(SCREEN_WIDTH - 1, SCREEN_HEIGHT-1)
+        self.road.shift_right(1)
+        self.road.set(0, 0, left_pixel)
+        self.road.set(SCREEN_WIDTH - 1, 0, right_pixel)
+        
+        # Move obstacles down
+        for obstacle in self.obstacles:
+            obstacle.y += 1
+        
+        # Remove obstacles that are off screen
+        self.obstacles = [obs for obs in self.obstacles if obs.y < SCREEN_HEIGHT]
+
+    def spawn_obstacles(self):
+        """Randomly spawn obstacles at the top of the screen"""
+        self.obstacle_spawn_counter += 1
+        
+        # Spawn obstacle every 15-30 steps randomly
+        if self.obstacle_spawn_counter >= random.randrange(15, 31):
+            self.obstacle_spawn_counter = 0
+            
+            # Choose random lane (avoid road edges)
+            lanes = [1, 2, 3, 4, 5, 6]  # Valid lanes for 3-wide obstacles
+            lane = random.choice(lanes)
+            
+            # Make sure obstacle doesn't overlap with existing ones
+            can_spawn = True
+            for existing in self.obstacles:
+                if existing.y < 10 and abs(existing.x - lane) < 4:  # Too close
+                    can_spawn = False
+                    break
+            
+            if can_spawn:
+                self.obstacles.append(Dot(lane, 0))
+
+    def update_bullets(self):
+        """Update bullet positions and remove off-screen bullets"""
+        for bullet in self.bullets:
+            bullet.y -= 2  # Bullets move up fast
+        
+        # Remove bullets that are off screen
+        self.bullets = [bullet for bullet in self.bullets if bullet.y >= 0]
+
+    def update_obstacles(self):
+        """Handle bullet-obstacle collisions"""
+        bullets_to_remove = []
+        obstacles_to_remove = []
+        
+        for i, bullet in enumerate(self.bullets):
+            for j, obstacle in enumerate(self.obstacles):
+                # Check if bullet hits obstacle
+                if (abs(bullet.x - (obstacle.x + 1)) <= 1 and
+                    abs(bullet.y - (obstacle.y + 1)) <= 1):
+                    bullets_to_remove.append(i)
+                    obstacles_to_remove.append(j)
+                    self.score += 10  # Points for destroying obstacle
+        
+        # Remove hit bullets and obstacles (in reverse order to maintain indices)
+        for i in sorted(bullets_to_remove, reverse=True):
+            if i < len(self.bullets):
+                del self.bullets[i]
+        for j in sorted(obstacles_to_remove, reverse=True):
+            if j < len(self.obstacles):
+                del self.obstacles[j]
+
+    def check_collisions(self, car_pos):
+        """Check if car collides with obstacles"""
+        if self.invulnerable_time > 0:
+            return  # Car is invulnerable
+        
+        car_center = Dot(car_pos.x + 1, car_pos.y + 2)  # Car center
+        
+        for obstacle in self.obstacles:
+            obstacle_center = Dot(obstacle.x + 1, obstacle.y + 1)
+            
+            # Check collision (simple distance check)
+            if (abs(car_center.x - obstacle_center.x) <= 2 and
+                abs(car_center.y - obstacle_center.y) <= 3):
+                self.lives -= 1
+                self.invulnerable_time = 60  # 3 seconds of invulnerability at 50ms per frame
+                break
+
+    def draw_obstacles(self):
+        """Draw all obstacles on screen"""
+        for obstacle in self.obstacles:
+            if 0 <= obstacle.y < SCREEN_HEIGHT - 2:  # Make sure obstacle fits on screen
+                self.screen.draw(obstacle.x, obstacle.y, self.obstacle)
+
+    def draw_bullets(self):
+        """Draw all bullets on screen"""
+        for bullet in self.bullets:
+            if 0 <= bullet.y < SCREEN_HEIGHT:
+                self.screen.set(bullet.x, bullet.y, YELLOW_IDX)
+
+    def draw_ui(self):
+        """Draw score and lives"""
+        # Draw score (top left and right)
+        score_display = min(99, self.score // 10)  # Show score/10, max 99
+        self.screen.draw(0, 0, figures.DIGITS[score_display // 10])
+        self.screen.draw(4, 0, figures.DIGITS[score_display % 10])
+        
+        # Draw lives (between score digits, as small dots)
+        for i in range(min(3, self.lives)):  # Show max 3 lives
+            self.screen.set(3, 1 + i, LIGHT_BLUE_IDX)  # Vertical stack between digits
+
+    def game_over(self):
+        """Game over animation"""
+        while not joy.was_pressed():
+            # Flash the screen
+            for color_idx in range(1, len(COLORS)):
+                for x in range(SCREEN_WIDTH):
+                    for y in range(6, SCREEN_HEIGHT):
+                        if random.randrange(3) == 0:  # Random flashing
+                            self.screen.set(x, y, color_idx)
+                
+                self.screen.render()
+                time.sleep_ms(100)
+                
+                # Clear and show final score
+                self.screen.clear()
+                final_score = min(99, self.score // 10)
+                self.screen.draw(1, 14, figures.DIGITS[final_score // 10])
+                self.screen.draw(5, 14, figures.DIGITS[final_score % 10])
+                self.screen.render()
+                time.sleep_ms(400)
 
 
 class Snake():
@@ -805,6 +1167,170 @@ class Snake():
             color = (color + 1) % len(COLORS)
             time.sleep_ms(200)
 
+class Live():
+
+    def __init__(self):
+        self.screen = FrameBuffer()
+        self.next_screen = FrameBuffer()
+        self.generation = 0
+        self.paused = False
+        self.pattern_index = 0
+        
+        # Define some classic Conway patterns
+        self.patterns = [
+            # Random pattern
+            None,
+            # Glider
+            [(1, 8), (2, 9), (0, 10), (1, 10), (2, 10)],
+            # Blinker
+            [(3, 10), (3, 11), (3, 12)],
+            # Block
+            [(3, 10), (4, 10), (3, 11), (4, 11)],
+            # Toad
+            [(2, 10), (3, 10), (4, 10), (1, 11), (2, 11), (3, 11)],
+            # Beacon
+            [(1, 8), (2, 8), (1, 9), (4, 10), (3, 11), (4, 11)],
+        ]
+        
+        # Initialize with first pattern
+        self.set_pattern()
+
+    def run(self):
+        self.play_live()
+    
+    def set_pattern(self):
+        """Set the current pattern on the grid"""
+        self.screen.clear()
+        self.generation = 0
+        
+        current_pattern = self.patterns[self.pattern_index]
+        if current_pattern is None:
+            # Random pattern
+            for x in range(SCREEN_WIDTH):
+                for y in range(6, SCREEN_HEIGHT):  # Skip top area for UI
+                    if random.randrange(4) == 0:  # 25% chance of being alive
+                        self.screen.set(x, y, GREEN_IDX)
+        else:
+            # Predefined pattern
+            for x, y in current_pattern:
+                if 0 <= x < SCREEN_WIDTH and 6 <= y < SCREEN_HEIGHT:
+                    self.screen.set(x, y, GREEN_IDX)
+    
+    def next_pattern(self):
+        """Cycle to the next pattern"""
+        self.pattern_index = (self.pattern_index + 1) % len(self.patterns)
+        self.set_pattern()
+    
+    def count_neighbors(self, x, y):
+        """Count live neighbors around cell at (x, y)"""
+        count = 0
+        for dx in [-1, 0, 1]:
+            for dy in [-1, 0, 1]:
+                if dx == 0 and dy == 0:
+                    continue  # Skip the cell itself
+                
+                nx, ny = x + dx, y + dy
+                
+                # Handle wrapping at screen boundaries
+                if nx < 0:
+                    nx = SCREEN_WIDTH - 1
+                elif nx >= SCREEN_WIDTH:
+                    nx = 0
+                    
+                if ny < 6:  # Don't wrap vertically into UI area
+                    continue
+                elif ny >= SCREEN_HEIGHT:
+                    ny = 6
+                
+                if self.screen.get(nx, ny) != BLACK_IDX:
+                    count += 1
+        
+        return count
+    
+    def next_generation(self):
+        """Calculate next generation based on Conway's rules"""
+        self.next_screen.clear()
+        
+        # Copy UI area
+        for x in range(SCREEN_WIDTH):
+            for y in range(6):
+                self.next_screen.set(x, y, self.screen.get(x, y))
+        
+        # Apply Conway's rules to game area
+        for x in range(SCREEN_WIDTH):
+            for y in range(6, SCREEN_HEIGHT):
+                neighbors = self.count_neighbors(x, y)
+                is_alive = self.screen.get(x, y) != BLACK_IDX
+                
+                # Conway's Game of Life rules:
+                # 1. Live cell with 2-3 neighbors survives
+                # 2. Dead cell with exactly 3 neighbors becomes alive
+                # 3. All other cells die or stay dead
+                if is_alive and (neighbors == 2 or neighbors == 3):
+                    self.next_screen.set(x, y, GREEN_IDX)
+                elif not is_alive and neighbors == 3:
+                    self.next_screen.set(x, y, GREEN_IDX)
+                # else: cell dies or stays dead (already cleared)
+        
+        # Swap buffers
+        self.screen, self.next_screen = self.next_screen, self.screen
+        self.generation += 1
+    
+    def draw_ui(self):
+        """Draw pattern indicator and controls info"""
+        # Display pattern number (0-5)
+        self.screen.draw(0, 0, figures.DIGITS[self.pattern_index])
+        
+        # Show generation indicator (simplified)
+        gen_indicator = min(9, self.generation // 10)  # Show progress as single digit
+        self.screen.draw(4, 0, figures.DIGITS[gen_indicator])
+        
+        self.screen.draw(0, 5, HLINE)
+        
+        # Show pause indicator
+        if self.paused:
+            # Draw pause symbol (two vertical lines)
+            self.screen.set(6, 1, YELLOW_IDX)
+            self.screen.set(6, 2, YELLOW_IDX)
+            self.screen.set(6, 3, YELLOW_IDX)
+            self.screen.set(7, 1, YELLOW_IDX)
+            self.screen.set(7, 2, YELLOW_IDX)
+            self.screen.set(7, 3, YELLOW_IDX)
+    
+    def play_live(self):
+        """Main Game of Life loop"""
+        step = 0
+        speed = 20  # Steps between generations (lower = faster)
+        
+        while True:
+            # Handle input
+            if joy.was_pressed():
+                self.paused = not self.paused
+            
+            # Cycle through patterns
+            if joy.was_pressed_x():
+                self.next_pattern()
+                self.paused = False
+            
+            # Speed control with joystick Y
+            speed_change = joy.was_pressed_y()
+            if speed_change > 0:
+                speed = min(50, speed + 5)  # Slower
+            elif speed_change < 0:
+                speed = max(5, speed - 5)   # Faster
+            
+            # Update generation
+            if not self.paused and step >= speed:
+                self.next_generation()
+                step = 0
+            
+            # Draw everything
+            self.draw_ui()
+            self.screen.render()
+            
+            step += 1
+            time.sleep_ms(50)
+
 
 GAMES = [
     (
@@ -858,6 +1384,19 @@ GAMES = [
             0o_00000000000000000000000000000000,
         ),
         Snake,
+    ),
+    (
+        (
+            0o_00000000000000000000000000000000,
+            0o_00000000000000000000000000000000,
+            0o_00000303030300303300303030000000,
+            0o_00000303030300300030303030000000,
+            0o_00000333330303303300333033300000,
+            0o_00000303030330300030303030300000,
+            0o_00000303030300303300303033300000,
+            0o_00000000000000000000000000000000,
+        ),
+        Live,
     )
 ]
 
